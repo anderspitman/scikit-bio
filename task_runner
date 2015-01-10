@@ -8,62 +8,133 @@
 # The full license is in the file COPYING.txt, distributed with this software.
 # ----------------------------------------------------------------------------
 
-CONDA_DIR=${PWD}/.conda_test_sandbox
-CONDA=${CONDA_DIR}/bin/conda
+CONDA_FILE=Miniconda3-3.7.3-Linux-x86_64.sh
+TEST_DIRNAME=.test_sandbox
+CONDA_DIRNAME=conda
 
+TARGET=${2}
+TEST_DIR=${PWD}/${TEST_DIRNAME}
+CONDA_DIR=${TEST_DIR}/${CONDA_DIRNAME}
+CONDA=${CONDA_DIR}/bin/conda
+ENV_DIR=${CONDA_DIR}/envs/${ENV_NAME}
+BIN=${ENV_DIR}/bin
+
+# removes conda installation
 clean() {
   rm -rf ${CONDA_DIR}
 }
 
-install_conda() {
-  #wget http://repo.continuum.io/miniconda/Miniconda3-3.7.3-Linux-x86_64.sh -O miniconda.sh
-  chmod +x miniconda.sh
-  ./miniconda.sh -b -p ${CONDA_DIR}
+# removes entire test directoyr, including downloaded miniconda
+clean_full() {
+  rm -rf ${TEST_DIR}
+}
+
+# install miniconda. download if necessary
+setup_conda() {
+  mkdir -p ${TEST_DIR}
+  CONDA_PATH=${TEST_DIR}/${CONDA_FILE}
+  if [ ! -x ${CONDA_PATH} ]; then
+    wget http://repo.continuum.io/miniconda/${CONDA_FILE} -O ${CONDA_PATH}
+    chmod +x ${CONDA_PATH}
+  fi
+  ${CONDA_PATH} -b -p ${CONDA_DIR}
   # Update conda itself
   ${CONDA} update --yes conda
 }
 
-
+# set up virtual conda environment
 setup_environment() {
-  ${CONDA} create --yes -n ${ENV_NAME} python=$PYTHON_VERSION pip \
-    numpy$NUMPY_VERSION scipy matplotlib$MATPLOTLIB_VERSION pandas nose pep8 \
-    Sphinx=1.2.2 IPython
-  if [ ${USE_CYTHON} ]; then ${CONDA} install --yes -n ${ENV_NAME} cython; fi
-  #source activate env_name
-  BIN=${CONDA_DIR}/envs/${ENV_NAME}/bin
+  if [ ! -f ${CONDA} ]; then
+    setup_conda
+  fi
+  ${CONDA} create --yes -n ${ENV_NAME} \
+    python=$PYTHON_VERSION pip numpy=$NUMPY_VERSION scipy \
+    matplotlib$MATPLOTLIB_VERSION pandas nose pep8 Sphinx=1.2.2 IPython
+  if [ ${USE_CYTHON} ]; then
+    ${CONDA} install --yes -n ${ENV_NAME} cython
+  fi
   ${BIN}/pip install sphinx-bootstrap-theme future \
     six coveralls natsort pyflakes flake8 python-dateutil
 }
 
+# install skbio into virtual environment
 install() {
+  if [ ! -d ${ENV_DIR} ]; then
+    setup_environment
+  fi
   ${BIN}/pip install -e . --no-deps
 }
 
 tests() {
   if [ ${WITH_DOCTEST} ]; then 
-    PYTHONWARNINGS=ignore ${BIN}/nosetests skbio --with-doctest --with-coverage \
+    PYTHONWARNINGS=ignore ${BIN}/nosetests ${TARGET} --with-doctest --with-coverage \
     -I DONOTIGNOREANYTHING 
   else
-    PYTHONWARNINGS=ignore ${BIN}/nosetests skbio --with-coverage -I DONOTIGNOREANYTHING
+    PYTHONWARNINGS=ignore ${BIN}/nosetests ${TARGET} --with-coverage -I DONOTIGNOREANYTHING
   fi
-  ${BIN}/pep8 skbio setup.py checklist.py
-  ${BIN}/flake8 skbio setup.py checklist.py
+  ${BIN}/pep8 ${TARGET} setup.py checklist.py
+  ${BIN}/flake8 ${TARGET} setup.py checklist.py
   ./checklist.py
 }
 
-run_local() {
-  PYTHON_VERSION=3.4
-  ENV_NAME=py${PYTHON_VERSION}
-  NUMPY_VERSION=
-  MATPLOTLIB_VERSION=
+docs() {
+  pushd doc
+  make clean
+  make html
+  popd
+}
+
+coverage() {
+  coveralls
+}
+
+all() {
+  tests
+  docs
+  coverage
+}
+
+full() {
+  clean_full
+  tests
+  docs
+  coverage
+}
+
+usage() {
+  USAGE="Usage: ${0} tests|docs|full|clean|clean_full [TARGET]"
+  echo ${USAGE}
+}
+
+test_py27() {
+  PYTHON_VERSION=2.7 NUMPY_VERSION='=1.7' MATPLOTLIB_VERSION='=1.3.1' WITH_DOCTEST=True
+  tests
+}
+
+test_py27_cython() {
+  PYTHON_VERSION=2.7 NUMPY_VERSION= MATPLOTLIB_VERSION= WITH_DOCTEST=True USE_CYTHON=TRUE
+  tests
+}
+
+test_py34() {
+  PYTHON_VERSION=3.4 NUMPY_VERSION= MATPLOTLIB_VERSION=
+  tests
 }
 
 case "$1" in 
   "tests" )
     tests;;
+  "docs" )
+    docs;;
+  "all" )
+    all;;
+  "full" )
+    full;;
   "clean" )
     clean;;
+  "clean_full" )
+    clean_full;;
   *)
-    echo "ERROR"
+    usage
 esac
 
