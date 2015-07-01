@@ -8,8 +8,11 @@
 
 from __future__ import absolute_import, division, print_function
 from future.builtins import range
-from future.utils import viewitems
+from future.utils import viewitems, with_metaclass
 import six
+from abc import ABCMeta, abstractmethod
+
+from cgi import escape
 
 import itertools
 import math
@@ -950,6 +953,14 @@ class Sequence(collections.Sequence, SkbioObject):
 
         """
         return str(self._string.decode("ascii"))
+
+    def _repr_html_(self):
+        return _SequenceReprBuilder(
+            seq=self,
+            width=71,  # 79 for pep8, 8 space indent for docstrings
+            indent=4,
+            chunk_size=10,
+            formatter=_HtmlFormatter).build()
 
     def __repr__(self):
         r"""Return a string representation of the biological sequence object.
@@ -1999,6 +2010,98 @@ def _slices_from_iter(array, indexables):
         yield array[i]
 
 
+class _ReprLineFormatter(with_metaclass(ABCMeta, object)):
+    def __init__(self, lines):
+        self._lines = lines
+
+    @abstractmethod
+    def heading(self, heading, level):
+        pass
+
+    def add_heading(self, heading, level):
+        self._lines.add_line(self.heading(heading, level))
+
+    @abstractmethod
+    def add_metadata(self, metadata):
+        pass
+
+    @abstractmethod
+    def add_positional_metadata(self, positional_metadata):
+        pass
+
+    @abstractmethod
+    def add_repr_stats(self, indent, repr_stats):
+        pass
+
+    @abstractmethod
+    def add_separator(self):
+        pass
+
+    @abstractmethod
+    def add_sequence(self, seq_lines):
+        pass
+
+
+class _PlainTextFormatter(_ReprLineFormatter):
+    def heading(self, heading, level):
+        return heading
+
+    def add_metadata(self, metadata):
+        self._lines.add_lines(metadata)
+
+    def add_positional_metadata(self, positional_metadata):
+        self._lines.add_lines(positional_metadata)
+
+    def add_repr_stats(self, indent, repr_stats):
+        for label, value in repr_stats():
+            self._lines.add_line('%s%s: %s' % (indent, label, value))
+
+    def add_separator(self):
+        self._lines.add_separator()
+
+    def add_sequence(self, seq_lines):
+        self._lines.add_lines(seq_lines)
+
+
+class _HtmlFormatter(_ReprLineFormatter):
+    def heading(self, heading, level):
+        return '<h{}>{}</h{}>'.format(level, escape(heading), level)
+
+    def add_metadata(self, metadata):
+        for line in metadata:
+            self._lines.add_line('<pre>{}</pre>'.format(escape(line)))
+
+    def add_positional_metadata(self, positional_metadata):
+        for line in positional_metadata:
+            self._lines.add_line('<pre>{}</pre>'.format(escape(line)))
+
+    def add_repr_stats(self, indent, repr_stats):
+        self._lines.add_line('<ul>')
+        for label, value in repr_stats():
+            self._lines.add_line(
+                '<li>{}'
+                '<strong>{}</strong>: '
+                '<em>{}</em>'
+                '</li>'.format(indent, escape(label), escape(value)))
+        self._lines.add_line('</ul>')
+
+    def add_separator(self):
+        pass
+
+    def add_sequence(self, seq_lines):
+        self._lines.add_line('<table>')
+        for line in seq_lines:
+            self._lines.add_line('<tr>')
+            columns = line.split()
+            for idx, col in enumerate(columns):
+                text = '{}'.format(escape(col))
+                if idx == 0:
+                    text = '<strong>{}</strong>'.format(text)
+                self._lines.add_line('<td>{}</td>'.format(text))
+            self._lines.add_line('</tr>')
+        self._lines.add_line('</table>')
+
+
 class _SequenceReprBuilder(object):
     """Build a ``Sequence`` repr.
 
@@ -2014,53 +2117,59 @@ class _SequenceReprBuilder(object):
         Number of characters in each chunk of a sequence.
 
     """
-    def __init__(self, seq, width, indent, chunk_size):
+    def __init__(self, seq, width, indent, chunk_size,
+                 formatter=None):
         self._seq = seq
         self._width = width
         self._indent = ' ' * indent
         self._chunk_size = chunk_size
 
+        self._formatter = formatter
+        if formatter is None:
+            self._formatter = _PlainTextFormatter
+
     def build(self):
         lines = _ElasticLines()
+        formatter = self._formatter(lines)
 
         cls_name = self._seq.__class__.__name__
-        lines.add_line(cls_name)
-        lines.add_separator()
+        formatter.add_heading(cls_name, 1)
+        formatter.add_separator()
 
         if self._seq.has_metadata():
-            lines.add_line('Metadata:')
+            formatter.add_heading('Metadata:', 2)
             # Python 3 doesn't allow sorting of mixed types so we can't just
             # use sorted() on the metadata keys. Sort first by type then sort
             # by value within each type.
             for key in self._sorted_keys_grouped_by_type(self._seq.metadata):
                 value = self._seq.metadata[key]
-                lines.add_lines(self._format_metadata_key_value(key, value))
+                formatter.add_metadata(
+                    self._format_metadata_key_value(key, value))
 
         if self._seq.has_positional_metadata():
-            lines.add_line('Positional metadata:')
+            formatter.add_heading('Positional metadata:', 2)
             for key in self._seq.positional_metadata.columns.values.tolist():
                 dtype = self._seq.positional_metadata[key].dtype
-                lines.add_lines(
+                formatter.add_positional_metadata(
                     self._format_positional_metadata_column(key, dtype))
 
-        lines.add_line('Stats:')
-        for label, value in self._seq._repr_stats():
-            lines.add_line('%s%s: %s' % (self._indent, label, value))
-        lines.add_separator()
+        formatter.add_heading('Stats:', 2)
+        formatter.add_repr_stats(self._indent, self._seq._repr_stats)
+        formatter.add_separator()
 
         num_lines, num_chars, column_width = self._find_optimal_seq_chunking()
 
         # display entire sequence if we can, else display the first two and
         # last two lines separated by ellipsis
         if num_lines <= 5:
-            lines.add_lines(self._format_chunked_seq(
+            formatter.add_sequence(self._format_chunked_seq(
                 range(num_lines), num_chars, column_width))
         else:
-            lines.add_lines(self._format_chunked_seq(
-                range(2), num_chars, column_width))
-            lines.add_line('...')
-            lines.add_lines(self._format_chunked_seq(
-                range(num_lines - 2, num_lines), num_chars, column_width))
+            formatter.add_sequence(
+                self._format_chunked_seq(range(2), num_chars, column_width) +
+                ['...'] +
+                self._format_chunked_seq(range(num_lines - 2, num_lines),
+                                         num_chars, column_width))
 
         return lines.to_str()
 
