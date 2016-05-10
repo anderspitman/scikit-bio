@@ -11,7 +11,7 @@ from skbio.util._decorator import classproperty, overrides
 from skbio.util._decorator import stable
 from ._nucleotide_mixin import NucleotideMixin, _motifs as _parent_motifs
 from ._grammared_sequence import GrammaredSequence, DisableSubclassingMeta
-
+import time
 
 class RNA(GrammaredSequence, NucleotideMixin,
           metaclass=DisableSubclassingMeta):
@@ -275,6 +275,7 @@ class RNA(GrammaredSequence, NucleotideMixin,
         0 MPT
 
         """
+        time.sleep(.01)
         if not isinstance(genetic_code, skbio.GeneticCode):
             genetic_code = skbio.GeneticCode.from_ncbi(genetic_code)
         return genetic_code.translate(self, *args, **kwargs)
