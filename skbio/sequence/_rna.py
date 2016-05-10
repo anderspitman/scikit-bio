@@ -275,7 +275,7 @@ class RNA(GrammaredSequence, NucleotideMixin,
         0 MPT
 
         """
-        time.sleep(.01)
+        time.sleep(.1)
         if not isinstance(genetic_code, skbio.GeneticCode):
             genetic_code = skbio.GeneticCode.from_ncbi(genetic_code)
         return genetic_code.translate(self, *args, **kwargs)
