@@ -33,32 +33,32 @@ def consume_iterator(iterator):
 
 class BenchmarkSuite:
 
-    def time_object_creation(self):
-        DNA(dna_bytes, validate=False)
+    #def time_object_creation(self):
+    #    DNA(dna_bytes, validate=False)
 
-    def time_object_creation_validate(self):
-        DNA(dna_bytes)
+    #def time_object_creation_validate(self):
+    #    DNA(dna_bytes)
 
-    def time_reverse_complement(self):
-        dna_seq.reverse_complement()
+    #def time_reverse_complement(self):
+    #    dna_seq.reverse_complement()
 
-    def time_degap_all(self):
-        dna_seq.degap()
+    #def time_degap_all(self):
+    #    dna_seq.degap()
 
     def time_translate(self):
         rna_seq.translate()
 
-    def time_search_for_motif(self):
-        consume_iterator(dna_seq.find_with_regex(motif_1_regex))
+    #def time_search_for_motif(self):
+    #    consume_iterator(dna_seq.find_with_regex(motif_1_regex))
 
-    def time_kmer_count_5(self):
-        dna_seq_short.kmer_frequencies(5)
+    #def time_kmer_count_5(self):
+    #    dna_seq_short.kmer_frequencies(5)
 
-    def time_kmer_count_25(self):
-        dna_seq_short.kmer_frequencies(25)
+    #def time_kmer_count_25(self):
+    #    dna_seq_short.kmer_frequencies(25)
 
-    def time_gc_content(self):
-        dna_seq.gc_content()
+    #def time_gc_content(self):
+    #    dna_seq.gc_content()
 
-    def time_search_for_motif_in_gapped(self):
-        dna_seq.find_with_regex(motif_1_regex, ignore=dna_seq.gaps())
+    #def time_search_for_motif_in_gapped(self):
+    #    dna_seq.find_with_regex(motif_1_regex, ignore=dna_seq.gaps())
