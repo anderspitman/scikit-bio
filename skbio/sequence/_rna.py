@@ -275,9 +275,6 @@ class RNA(GrammaredSequence, NucleotideMixin,
         0 MPT
 
         """
-        for i in range(5000000):
-            pass
-
         if not isinstance(genetic_code, skbio.GeneticCode):
             genetic_code = skbio.GeneticCode.from_ncbi(genetic_code)
         return genetic_code.translate(self, *args, **kwargs)
